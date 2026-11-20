@@ -11,6 +11,8 @@
 extern "C" {
 #include "user_interface.h"
 }
+// Present in the SDK library but missing from the Arduino header
+extern "C" bool wifi_softap_deauth(uint8_t mac[6]);
 
 #define CFG_MAGIC 0xA51C0DE3UL
 #define RESET_PIN 0
@@ -561,8 +563,7 @@ void setup() {
   loadCfg();
   startAP();
   dns.start(53, "*", apIP);   // captive portal: phones open the console automatically
-  const char* hdr[] = {"Cookie"};
-  server.collectHeaders(hdr, 1);
+  server.collectHeaders("Cookie");
   server.on("/", hIndex);
   server.on("/api/login", HTTP_POST, hLogin);
   server.on("/api/logout", HTTP_POST, hLogout);
