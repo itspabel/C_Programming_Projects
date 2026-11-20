@@ -1,5 +1,5 @@
-name: Build firmware
-on: [push, workflow_dispatch]
+name: Build ESP Link
+on: workflow_dispatch
 permissions:
   contents: write
 jobs:
@@ -12,11 +12,15 @@ jobs:
           python-version: '3.11'
       - run: pip install platformio
       - run: pio run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: .pio/build/nodemcuv2/firmware.bin
       - run: |
           mkdir -p out
           cp .pio/build/nodemcuv2/firmware.bin out/firmware.bin
-          git config user.name github-actions
           git config user.email actions@github.com
+          git config user.name github-actions
           git add -f out/firmware.bin
           git commit -m "Build firmware.bin" || echo "no change"
           git push
