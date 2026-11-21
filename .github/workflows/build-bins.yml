@@ -1,0 +1,75 @@
+name: Build firmware bins
+
+# Every file or folder inside src/ is its own project:
+#   src/esp_file_share.cpp   ->  bin/esp_file_share.bin
+#   src/chat_node/           ->  bin/chat_node.bin   (all files inside the folder)
+# Uses the root platformio.ini as the template. A folder can carry its own
+# platformio.ini to use a different board.
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'platformio.ini'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('platformio.ini') }}
+
+      - run: pip install platformio
+
+      - name: Build every project in src/
+        run: |
+          mkdir -p bin
+          fail=0
+          build_one() {
+            name="$1"; src="$2"
+            w="/tmp/pio/$name"
+            rm -rf "$w"; mkdir -p "$w/src"
+            cp platformio.ini "$w/platformio.ini"
+            if [ -d "$src" ]; then cp -r "$src"/. "$w/src/"; else cp "$src" "$w/src/"; fi
+            if [ -f "$w/src/platformio.ini" ]; then mv "$w/src/platformio.ini" "$w/platformio.ini"; fi
+            echo "::group::Build $name"
+            if (cd "$w" && pio run); then
+              cp "$w"/.pio/build/*/firmware.bin "bin/$name.bin"
+              echo "OK   $name -> bin/$name.bin"
+            else
+              echo "FAIL $name"
+              fail=1
+            fi
+            echo "::endgroup::"
+          }
+          shopt -s nullglob
+          for f in src/*.cpp src/*.ino; do
+            build_one "$(basename "${f%.*}")" "$f"
+          done
+          for d in src/*/; do
+            d="${d%/}"
+            build_one "$(basename "$d")" "$d"
+          done
+          exit $fail
+
+      - name: Commit bins
+        if: always()
+        run: |
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git add -f bin
+          git commit -m "Update firmware bins" || echo "nothing to commit"
+          git pull --rebase
+          git push
